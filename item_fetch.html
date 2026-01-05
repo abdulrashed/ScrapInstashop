@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Instashop Scraper & Excel Export</title>
+</head>
+
+<body>
+    <h2>Fetch API Data</h2>
+
+    <textarea id="barcodeInput" rows="10" cols="100" placeholder="Paste Barcode here..."></textarea><br><br>
+
+    <label for="startPage">Start Page:</label>
+    <input type="number" id="startPage" value="1" min="1" style="width:80px; margin-right:20px;">
+
+    <label for="maxPage">Max Page:</label>
+    <input type="number" id="maxPage" value="2400" min="1" style="width:80px;"><br><br>
+
+    <button onclick="fetchAndExportChunks()">Fetch API & Export to Excel</button>
+
+    <pre id="output"></pre>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="item_fetch.js"></script>
+</body>
+
+</html>
