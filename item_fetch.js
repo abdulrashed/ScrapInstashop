@@ -2511,6 +2511,7 @@ async function fetchAndExportChunks() {
 
             const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
             const json = await res.json();
+            console.log(`Batch ${batchNumber} response:`, json);
 
             const records = (json && json.result) ? json.result : [];
             output.textContent += `✅ Received ${records.length} records in batch ${batchNumber}\n`;
@@ -2577,14 +2578,15 @@ async function fetchAndExportChunks() {
 
                 // Always include the original row first
                 const rows = [
-                    {...row } // original barcode
+                    {...row, PrimaryBarcode: true } // original barcode
                 ];
 
                 // Then add a row for each alt barcode
                 altList.forEach(b => {
                     rows.push({
                         ...row,
-                        Barcode: b
+                        Barcode: b,
+                        PrimaryBarcode: false
                     });
                 });
 
@@ -2617,140 +2619,241 @@ async function fetchAndExportChunks() {
     }
 }
 
-
-async function fetchAndExport() {
+async function fetchAndDownloadImages() {
     const output = document.getElementById("output");
 
-    const startPage = parseInt(document.getElementById("startPage").value, 10);
-    const totalPages = parseInt(document.getElementById("maxPage").value, 10);
+    bindBarcodesFromInput();
 
-    const allData = [];
-    const recordsPerPage = 60;
-    const saveInterval = 50; // save every 50 pages
+    if (allBarcodes.length === 0) {
+        output.textContent = "⚠️ No barcodes provided.";
+        return;
+    }
+
+    const barcodeChunks = chunkArray(allBarcodes, 50);
     let batchNumber = 1;
 
     try {
-        for (let page = startPage; page <= totalPages; page++) {
-            output.textContent += `🔹 Fetching page ${page}...\n`;
+        for (const chunk of barcodeChunks) {
+            const qString = chunk.join(",");
+            output.textContent += `🔹 Fetching batch ${batchNumber}...\n`;
 
             const body = {
                 ...bodyTemplate,
                 queryObject: {
                     ...bodyTemplate.queryObject,
-                    size: recordsPerPage,
-                    page: page
+                    q: qString
                 }
             };
 
-            const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
-            const json = await res.json();
-
-            const records = (json && json.result) ? json.result : [];
-            output.textContent += `✅ Received ${records.length} records on page ${page}\n`;
-
-            // Create category map
-            const categoryMap = {};
-            categoriesData.result.forEach(cat => {
-                categoryMap[cat.objectId] = cat.title;
+            const res = await fetch(url, {
+                method: "POST",
+                headers,
+                body: JSON.stringify(body)
             });
 
-            // Map current records
+            const json = await res.json();
+            const records = (json && json.result) ? json.result : [];
+
+            output.textContent += `✅ ${records.length} products received\n`;
+
+            const timestamp = new Date()
+                .toISOString()
+                .replace(/[:.]/g, "-");
+
+            /* ============================
+               IMAGE DOWNLOAD (NO FETCH)
+            ============================ */
+
+            for (const item of records) {
+                if (!item.imageUrl) continue;
+
+                var barcode = "";
+
+                if (item.barcode && item.barcode.value) {
+                    barcode = item.barcode.value;
+                } else if (item.objectId) {
+                    barcode = item.objectId;
+                } else {
+                    barcode = Math.random().toString(36).slice(2);
+                }
+
+                const fileName =
+                    `batch_${batchNumber}_${timestamp}_${barcode}.jpg`;
+
+                const a = document.createElement("a");
+                a.href = item.imageUrl;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+
+                // Small delay to avoid browser blocking
+                await sleep(300);
+            }
+
+            output.textContent +=
+                `📥 Download triggered for batch ${batchNumber}\n`;
+
+            const delay = Math.floor(Math.random() * 4000) + 3000;
+            await sleep(delay);
+
+            batchNumber++;
+        }
+
+        output.textContent += `🎉 All batches processed\n`;
+
+    } catch (err) {
+        output.textContent += `❌ Error: ${err}\n`;
+        console.error(err);
+    }
+}
+
+
+// =====================================================================
+// Fetch API + Export Excel + Download Images (zipped) per batch
+// For each chunk of barcodes, this:
+//   1. Hits the API
+//   2. Builds the same expanded rows as fetchAndExportChunks (incl. PrimaryBarcode)
+//   3. Saves an .xlsx for that batch
+//   4. Fetches every unique imageUrl in that batch and packs them into a .zip
+// Filenames: instashop_barcodes_batch_<n>.xlsx + instashop_images_batch_<n>.zip
+// =====================================================================
+async function fetchExportAndDownloadImages() {
+    const output = document.getElementById("output");
+    bindBarcodesFromInput();
+    if (allBarcodes.length === 0) {
+        output.textContent = "No barcodes provided. Please enter barcodes.";
+        return;
+    }
+    if (typeof JSZip === "undefined") {
+        output.textContent = "JSZip library not loaded. Check item_fetch.html script tags.";
+        return;
+    }
+    const barcodeChunks = chunkArray(allBarcodes, 50);
+    let batchNumber = 1;
+    try {
+        for (const chunk of barcodeChunks) {
+            const qString = chunk.join(",");
+            output.textContent += "Batch " + batchNumber + " (" + chunk.length + " barcodes)...\n";
+            const body = { ...bodyTemplate, queryObject: { ...bodyTemplate.queryObject, q: qString } };
+            const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
+            const json = await res.json();
+            const records = (json && json.result) ? json.result : [];
+            output.textContent += "   " + records.length + " products received\n";
+
+            const categoryMap = {};
+            (categoriesData.result || []).forEach(cat => { categoryMap[cat.objectId] = cat.title; });
+
             const mapped = records.map(item => ({
                 ID: item.objectId || "",
                 Title: item.title || "",
                 ArabicTitle: item.localizedTitle && item.localizedTitle.ar ? item.localizedTitle.ar : "",
                 Packaging: item.packagingString || "",
                 Barcode: item.barcode && item.barcode.value ? item.barcode.value : "",
-                Price: item.productObject &&
-                    item.productObject.clients &&
-                    item.productObject.clients["H9oyqPv3UO"] &&
-                    item.productObject.clients["H9oyqPv3UO"].price &&
-                    item.productObject.clients["H9oyqPv3UO"].price.retail ?
-                    item.productObject.clients["H9oyqPv3UO"].price.retail : "",
-                WithMargin: item.productObject &&
-                    item.productObject.clients &&
-                    item.productObject.clients["H9oyqPv3UO"] &&
-                    item.productObject.clients["H9oyqPv3UO"].price &&
-                    item.productObject.clients["H9oyqPv3UO"].price.withMargin ?
-                    item.productObject.clients["H9oyqPv3UO"].price.withMargin : "",
-                OriginalPrice: item.productObject &&
-                    item.productObject.clients &&
-                    item.productObject.clients["H9oyqPv3UO"] &&
-                    item.productObject.clients["H9oyqPv3UO"].originalPrice ?
-                    item.productObject.clients["H9oyqPv3UO"].originalPrice : "",
-                Status: item.productObject &&
-                    item.productObject.clients &&
-                    item.productObject.clients["H9oyqPv3UO"] &&
-                    typeof item.productObject.clients["H9oyqPv3UO"].status !== "undefined" ?
-                    item.productObject.clients["H9oyqPv3UO"].status : "",
-                Active: item.productObject &&
-                    item.productObject.clients &&
-                    item.productObject.clients["H9oyqPv3UO"] &&
-                    typeof item.productObject.clients["H9oyqPv3UO"].active !== "undefined" ?
-                    item.productObject.clients["H9oyqPv3UO"].active : "",
+                Price: item.productObject && item.productObject.clients && item.productObject.clients["H9oyqPv3UO"] && item.productObject.clients["H9oyqPv3UO"].price && item.productObject.clients["H9oyqPv3UO"].price.retail ? item.productObject.clients["H9oyqPv3UO"].price.retail : "",
+                WithMargin: item.productObject && item.productObject.clients && item.productObject.clients["H9oyqPv3UO"] && item.productObject.clients["H9oyqPv3UO"].price && item.productObject.clients["H9oyqPv3UO"].price.withMargin ? item.productObject.clients["H9oyqPv3UO"].price.withMargin : "",
+                OriginalPrice: item.productObject && item.productObject.clients && item.productObject.clients["H9oyqPv3UO"] && item.productObject.clients["H9oyqPv3UO"].originalPrice ? item.productObject.clients["H9oyqPv3UO"].originalPrice : "",
+                Status: item.productObject && item.productObject.clients && item.productObject.clients["H9oyqPv3UO"] && typeof item.productObject.clients["H9oyqPv3UO"].status !== "undefined" ? item.productObject.clients["H9oyqPv3UO"].status : "",
+                Active: item.productObject && item.productObject.clients && item.productObject.clients["H9oyqPv3UO"] && typeof item.productObject.clients["H9oyqPv3UO"].active !== "undefined" ? item.productObject.clients["H9oyqPv3UO"].active : "",
                 Image: item.imageUrl || "",
                 OrignalImage: item.originalUrl || "",
-                altBarcodes: item.barcode && item.barcode.alt && Array.isArray(item.barcode.alt) ?
-                    item.barcode.alt.map(a => a.value).join(", ") : "",
-                CategoryName: item.category && item.category.objectId ?
-                    (categoryMap[item.category.objectId] || "Unknown Category") : "No Category",
+                altBarcodes: item.barcode && item.barcode.alt && Array.isArray(item.barcode.alt) ? item.barcode.alt.map(a => a.value).join(", ") : "",
+                CategoryName: item.category && item.category.objectId ? (categoryMap[item.category.objectId] || "Unknown Category") : "No Category",
                 HasSubtitles: item.hasSubstitutes || "",
                 IsForWeighing: item.isForWeighing || "",
-                BusinessTypes: item.categoriesPerBusinessType ?
-                    Object.keys(item.categoriesPerBusinessType).join(", ") : "",
+                BusinessTypes: item.categoriesPerBusinessType ? Object.keys(item.categoriesPerBusinessType).join(", ") : "",
                 CreatedAt: item.createdAt || "",
                 UpdatedAt: item.updatedAt || "",
                 Type: ""
             }));
 
-            // Expand and flatten
             const expanded = mapped.flatMap(row => {
-                const altList = row.altBarcodes ?
-                    row.altBarcodes.split(",").map(b => b.trim()).filter(b => b.length > 0) : [];
-
-                const rows = [{...row }];
-
-                altList.forEach(b => {
-                    rows.push({
-                        ...row,
-                        Barcode: b
-                    });
-                });
-
+                const altList = row.altBarcodes ? row.altBarcodes.split(",").map(b => b.trim()).filter(b => b.length > 0) : [];
+                const rows = [{ ...row, PrimaryBarcode: true }];
+                altList.forEach(b => { rows.push({ ...row, Barcode: b, PrimaryBarcode: false }); });
                 return rows;
-            });
+            }).map(r => ({ ...r, Type: chunk.includes(r.Barcode) ? "GM Barcode" : r.Type }));
 
-            allData.push(...expanded);
+            const ws = XLSX.utils.json_to_sheet(expanded);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Products");
+            const xlsxName = "instashop_barcodes_batch_" + batchNumber + ".xlsx";
+            XLSX.writeFile(wb, xlsxName);
+            output.textContent += "   Saved " + xlsxName + "\n";
 
-            // Save every 50 pages
-            if ((page + 1) % saveInterval === 0 || page === totalPages) {
-                const ws = XLSX.utils.json_to_sheet(allData);
-                const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, "Products");
-
-                const partNum = Math.ceil((page + 1) / saveInterval);
-                const fileName = `instashop_products_part_${partNum}.xlsx`;
-
-                XLSX.writeFile(wb, fileName);
-                output.textContent += `💾 Saved ${fileName} with ${allData.length} records (up to page ${page})\n`;
-
-                // Clear after saving to reduce memory
-                allData.length = 0;
+            const zip = new JSZip();
+            const seen = new Set();
+            const proxies = [
+                u => "https://corsproxy.io/?" + encodeURIComponent(u),
+                u => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u),
+                u => "https://api.codetabs.com/v1/proxy/?quest=" + encodeURIComponent(u),
+                u => u
+            ];
+            async function fetchImageBlob(url) {
+                let lastErr;
+                for (let i = 0; i < proxies.length; i++) {
+                    const proxiedUrl = proxies[i](url);
+                    try {
+                        const r = await fetch(proxiedUrl);
+                        if (!r.ok) { lastErr = "HTTP " + r.status + " via proxy#" + i; continue; }
+                        const blob = await r.blob();
+                        if (!blob || blob.size === 0) { lastErr = "empty blob via proxy#" + i; continue; }
+                        return { blob, proxyIndex: i };
+                    } catch (e) {
+                        lastErr = e.message + " via proxy#" + i;
+                    }
+                }
+                throw new Error(lastErr || "all proxies failed");
             }
+            const imageTasks = [];
+            let okCount = 0, failCount = 0;
+            for (const item of records) {
+                if (!item.imageUrl || seen.has(item.imageUrl)) continue;
+                seen.add(item.imageUrl);
+                let nameKey = "";
+                if (item.barcode && item.barcode.value) nameKey = item.barcode.value;
+                else if (item.objectId) nameKey = item.objectId;
+                else nameKey = Math.random().toString(36).slice(2);
+                nameKey = String(nameKey).replace(/[\\/:*?"<>|]/g, "_");
+                const extMatch = item.imageUrl.match(/\.(jpg|jpeg|png|webp|gif)(\?|$)/i);
+                const ext = extMatch ? extMatch[1].toLowerCase() : "jpg";
+                const fileName = nameKey + "." + ext;
+                imageTasks.push(
+                    fetchImageBlob(item.imageUrl)
+                        .then(({ blob, proxyIndex }) => {
+                            zip.file(fileName, blob);
+                            okCount++;
+                            output.textContent += "      OK   " + fileName + " (" + blob.size + " bytes via proxy#" + proxyIndex + ")\n";
+                        })
+                        .catch(e => {
+                            failCount++;
+                            output.textContent += "      FAIL " + fileName + " :: " + e.message + "\n";
+                            console.error("Image fail:", item.imageUrl, e);
+                        })
+                );
+            }
+            output.textContent += "   Downloading " + imageTasks.length + " unique images...\n";
+            await Promise.all(imageTasks);
+            output.textContent += "   Result: " + okCount + " ok, " + failCount + " failed\n";
 
+            const zipBlob = await zip.generateAsync({ type: "blob" });
+            const zipName = "instashop_images_batch_" + batchNumber + ".zip";
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(zipBlob);
+            a.download = zipName;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+            output.textContent += "   Saved " + zipName + "\n";
 
-            // Random delay between 3–7 seconds
             const delay = Math.floor(Math.random() * 4000) + 3000;
-            output.textContent += `⏳ Waiting ${delay / 1000}s before next page...\n`;
+            output.textContent += "   Waiting " + (delay / 1000) + "s...\n";
             await sleep(delay);
-
             batchNumber++;
         }
-
-        output.textContent += `🎉 Done! All ${totalPages} pages fetched and saved.\n`;
-
+        output.textContent += "All batches done.\n";
     } catch (err) {
-        output.textContent += `❌ Error: ${err}\n`;
+        output.textContent += "Error: " + err + "\n";
         console.error(err);
     }
 }

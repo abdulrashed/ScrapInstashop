@@ -19,9 +19,15 @@
 
     <button onclick="fetchAndExportChunks()">Fetch API & Export to Excel</button>
 
+    <button onclick="fetchExportAndDownloadImages()">Fetch API, Export Excel and Download Image</button>
+
+    <!-- <button onclick="fetchAndDownloadImages()">Fetch API & Download Image to Folder</button> -->
+
     <pre id="output"></pre>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <script src="item_fetch.js"></script>
 </body>
 

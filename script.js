@@ -2589,14 +2589,15 @@ async function fetchAndExportChunks() {
 
                 // Always include the original row first
                 const rows = [
-                    {...row } // original barcode
+                    {...row, PrimaryBarcode: true } // original barcode
                 ];
 
                 // Then add a row for each alt barcode
                 altList.forEach(b => {
                     rows.push({
                         ...row,
-                        Barcode: b
+                        Barcode: b,
+                        PrimaryBarcode: false
                     });
                 });
 
@@ -2720,12 +2721,13 @@ async function fetchAndExport() {
                 const altList = row.altBarcodes ?
                     row.altBarcodes.split(",").map(b => b.trim()).filter(b => b.length > 0) : [];
 
-                const rows = [{...row }];
+                const rows = [{...row, PrimaryBarcode: true }];
 
                 altList.forEach(b => {
                     rows.push({
                         ...row,
-                        Barcode: b
+                        Barcode: b,
+                        PrimaryBarcode: false
                     });
                 });
 
