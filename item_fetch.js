@@ -2810,10 +2810,18 @@ async function fetchExportAndDownloadImages() {
             for (const item of records) {
                 if (!item.imageUrl || seen.has(item.imageUrl)) continue;
                 seen.add(item.imageUrl);
-                let nameKey = "";
-                if (item.barcode && item.barcode.value) nameKey = item.barcode.value;
-                else if (item.objectId) nameKey = item.objectId;
-                else nameKey = Math.random().toString(36).slice(2);
+                const allBarcodes = [
+                    item.barcode && item.barcode.value ? item.barcode.value : null,
+                    ...(item.barcode && Array.isArray(item.barcode.alt) ? item.barcode.alt.map(a => a && a.value).filter(Boolean) : [])
+                ].filter(Boolean);
+                let inputBarcode = null;
+                for (const bc of allBarcodes) {
+                    if (chunk.includes(bc)) { inputBarcode = bc; break; }
+                }
+                let nameKey = inputBarcode
+                    || (item.barcode && item.barcode.value)
+                    || item.objectId
+                    || Math.random().toString(36).slice(2);
                 nameKey = String(nameKey).replace(/[\\/:*?"<>|]/g, "_");
                 const extMatch = item.imageUrl.match(/\.(jpg|jpeg|png|webp|gif)(\?|$)/i);
                 const ext = extMatch ? extMatch[1].toLowerCase() : "jpg";
