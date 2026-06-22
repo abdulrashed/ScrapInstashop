@@ -2422,7 +2422,7 @@ const headers = {
     "x-parse-application-id": "Q8p0cZi0Es6POXNb4tNqqP7NdzXsqKd9Mzzdkdq6",
     "x-parse-client-id": "H9oyqPv3UO",
     "x-parse-rest-api-key": "UCOGUXAS6gqQRy3p184T0TI7M8UDWOoR1AQ5JF7y",
-    "x-parse-session-token": "r:baf4298b70b0c1935fbe5e2613df6c90",
+    "x-parse-session-token": "r:8e2cc18f3dbb24a779d0f8181dec13b2",
     "Content-Type": "application/json",
 };
 
@@ -2729,6 +2729,13 @@ async function fetchExportAndDownloadImages() {
         output.textContent = "JSZip library not loaded. Check item_fetch.html script tags.";
         return;
     }
+    try {
+        const proxyHealth = await fetch("http://127.0.0.1:3001/health", { cache: "no-store" });
+        if (!proxyHealth.ok) throw new Error("HTTP " + proxyHealth.status);
+    } catch (err) {
+        output.textContent = "Image proxy is not running. Close this page, double-click start-item-fetch.cmd, and use the page it opens.";
+        return;
+    }
     const barcodeChunks = chunkArray(allBarcodes, 50);
     let batchNumber = 1;
     try {
@@ -2784,26 +2791,24 @@ async function fetchExportAndDownloadImages() {
             const zip = new JSZip();
             const seen = new Set();
             const proxies = [
-                u => "https://corsproxy.io/?" + encodeURIComponent(u),
-                u => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u),
-                u => "https://api.codetabs.com/v1/proxy/?quest=" + encodeURIComponent(u),
-                u => u
+                { name: "local proxy", url: u => "http://127.0.0.1:3001/proxy?url=" + encodeURIComponent(u) }
             ];
             async function fetchImageBlob(url) {
                 let lastErr;
                 for (let i = 0; i < proxies.length; i++) {
-                    const proxiedUrl = proxies[i](url);
+                    const proxy = proxies[i];
+                    const proxiedUrl = proxy.url(url);
                     try {
                         const r = await fetch(proxiedUrl);
-                        if (!r.ok) { lastErr = "HTTP " + r.status + " via proxy#" + i; continue; }
+                        if (!r.ok) { lastErr = "HTTP " + r.status + " via " + proxy.name; continue; }
                         const blob = await r.blob();
-                        if (!blob || blob.size === 0) { lastErr = "empty blob via proxy#" + i; continue; }
-                        return { blob, proxyIndex: i };
+                        if (!blob || blob.size === 0) { lastErr = "empty response via " + proxy.name; continue; }
+                        return { blob, proxyName: proxy.name };
                     } catch (e) {
-                        lastErr = e.message + " via proxy#" + i;
+                        lastErr = e.message + " via " + proxy.name;
                     }
                 }
-                throw new Error(lastErr || "all proxies failed");
+                throw new Error((lastErr || "local proxy failed") + ". Check the Image Proxy window for details.");
             }
             const imageTasks = [];
             let okCount = 0, failCount = 0;
@@ -2828,10 +2833,10 @@ async function fetchExportAndDownloadImages() {
                 const fileName = nameKey + "." + ext;
                 imageTasks.push(
                     fetchImageBlob(item.imageUrl)
-                        .then(({ blob, proxyIndex }) => {
+                        .then(({ blob, proxyName }) => {
                             zip.file(fileName, blob);
                             okCount++;
-                            output.textContent += "      OK   " + fileName + " (" + blob.size + " bytes via proxy#" + proxyIndex + ")\n";
+                            output.textContent += "      OK   " + fileName + " (" + blob.size + " bytes via " + proxyName + ")\n";
                         })
                         .catch(e => {
                             failCount++;
