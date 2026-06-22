@@ -16,7 +16,7 @@ Every push to the connected GitHub branch creates a new Vercel deployment automa
 
 ## How image downloads work
 
-The page calls `/api/image-proxy`, a Vercel Function in `api/image-proxy.js`. The function accepts only HTTPS URLs hosted under `instashop.ae`, downloads the image server-side, and returns it to the page for inclusion in the ZIP.
+The page calls `/api/image-proxy`, a Vercel Function in `api/image-proxy.js`. The function accepts only known InstaShop HTTPS image hosts (`*.instashop.ae` and `files.instashop.com`), downloads the image server-side, and returns it to the page for inclusion in the ZIP.
 
 ## Local use
 

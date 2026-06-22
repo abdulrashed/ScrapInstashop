@@ -2810,7 +2810,17 @@ async function fetchExportAndDownloadImages() {
                     const proxiedUrl = proxy.url(url);
                     try {
                         const r = await fetch(proxiedUrl);
-                        if (!r.ok) { lastErr = "HTTP " + r.status + " via " + proxy.name; continue; }
+                        if (!r.ok) {
+                            let detail = "";
+                            try {
+                                const errorBody = await r.json();
+                                detail = errorBody.error ? ": " + errorBody.error : "";
+                            } catch (parseError) {
+                                // The response was not JSON; the HTTP status is still useful.
+                            }
+                            lastErr = "HTTP " + r.status + " via " + proxy.name + detail;
+                            continue;
+                        }
                         const blob = await r.blob();
                         if (!blob || blob.size === 0) { lastErr = "empty response via " + proxy.name; continue; }
                         return { blob, proxyName: proxy.name };
@@ -2818,7 +2828,10 @@ async function fetchExportAndDownloadImages() {
                         lastErr = e.message + " via " + proxy.name;
                     }
                 }
-                throw new Error((lastErr || "local proxy failed") + ". Check the Image Proxy window for details.");
+                const nextStep = isLocalApp
+                    ? " Check the Image Proxy window for details."
+                    : " Check the Vercel Function logs for details.";
+                throw new Error((lastErr || "image proxy failed") + "." + nextStep);
             }
             const imageTasks = [];
             let okCount = 0, failCount = 0;

@@ -1,10 +1,13 @@
-const ALLOWED_HOST_SUFFIX = ".instashop.ae";
+const ALLOWED_IMAGE_HOSTS = new Set([
+    "files.instashop.com",
+    "instashop.ae"
+]);
 
 function isAllowedImageUrl(value) {
     try {
         const parsed = new URL(value);
         return parsed.protocol === "https:"
-            && (parsed.hostname === "instashop.ae" || parsed.hostname.endsWith(ALLOWED_HOST_SUFFIX));
+            && (ALLOWED_IMAGE_HOSTS.has(parsed.hostname) || parsed.hostname.endsWith(".instashop.ae"));
     } catch (err) {
         return false;
     }
