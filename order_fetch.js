@@ -6,11 +6,11 @@ async function fetchOrder(orderCode) {
             method: "POST",
             headers: {
                 "installation-id": "0c68954b-ac81-46b4-a028-9236709ecd5a",
-                "instashop-session-token": "r:baf4298b70b0c1935fbe5e2613df6c90",
+                "instashop-session-token": "r:8e2cc18f3dbb24a779d0f8181dec13b2",
                 "origin": "https://instashop.ae",
                 "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win32; x64) Chrome/141 Safari/537.36",
                 "user-id": "emOiLQa7l3",
-                "x-parse-session-token": "r:baf4298b70b0c1935fbe5e2613df6c90",
+                "x-parse-session-token": "r:8e2cc18f3dbb24a779d0f8181dec13b2",
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({ input: orderCode }),

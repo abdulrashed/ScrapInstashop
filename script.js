@@ -37,7 +37,7 @@ const headers = {
     "x-parse-application-id": "Q8p0cZi0Es6POXNb4tNqqP7NdzXsqKd9Mzzdkdq6",
     "x-parse-client-id": "H9oyqPv3UO",
     "x-parse-rest-api-key": "UCOGUXAS6gqQRy3p184T0TI7M8UDWOoR1AQ5JF7y",
-    "x-parse-session-token": "r:baf4298b70b0c1935fbe5e2613df6c90",
+    "x-parse-session-token": "r:8e2cc18f3dbb24a779d0f8181dec13b2",
     "Content-Type": "application/json",
 };
 
