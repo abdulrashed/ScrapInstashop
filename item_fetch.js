@@ -2729,11 +2729,21 @@ async function fetchExportAndDownloadImages() {
         output.textContent = "JSZip library not loaded. Check item_fetch.html script tags.";
         return;
     }
+    const isLocalApp = location.protocol === "file:"
+        || ((location.hostname === "127.0.0.1" || location.hostname === "localhost") && location.port === "3001");
+    const proxyHealthUrl = isLocalApp
+        ? "http://127.0.0.1:3001/health"
+        : "/api/image-proxy?health=1";
+    const proxyImageUrl = isLocalApp
+        ? u => "http://127.0.0.1:3001/proxy?url=" + encodeURIComponent(u)
+        : u => "/api/image-proxy?url=" + encodeURIComponent(u);
     try {
-        const proxyHealth = await fetch("http://127.0.0.1:3001/health", { cache: "no-store" });
+        const proxyHealth = await fetch(proxyHealthUrl, { cache: "no-store" });
         if (!proxyHealth.ok) throw new Error("HTTP " + proxyHealth.status);
     } catch (err) {
-        output.textContent = "Image proxy is not running. Close this page, double-click start-item-fetch.cmd, and use the page it opens.";
+        output.textContent = isLocalApp
+            ? "Image proxy is not running. Close this page, double-click start-item-fetch.cmd, and use the page it opens."
+            : "Hosted image proxy is unavailable. Deploy the full repository to Vercel instead of GitHub Pages.";
         return;
     }
     const barcodeChunks = chunkArray(allBarcodes, 50);
@@ -2791,7 +2801,7 @@ async function fetchExportAndDownloadImages() {
             const zip = new JSZip();
             const seen = new Set();
             const proxies = [
-                { name: "local proxy", url: u => "http://127.0.0.1:3001/proxy?url=" + encodeURIComponent(u) }
+                { name: isLocalApp ? "local proxy" : "Vercel proxy", url: proxyImageUrl }
             ];
             async function fetchImageBlob(url) {
                 let lastErr;
